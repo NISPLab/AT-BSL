@@ -3,17 +3,12 @@ import os
 import argparse
 import torch
 import torch.optim as optim
-from torchvision.transforms import v2, AutoAugmentPolicy
-from models.wideresnet import *
-from models.resnet import *
+from models.ti_preact_resnet import ti_preact_resnet
 from at_bsl_loss import pgd_loss
 from pgd_attack import eval_adv_test_whitebox
-from datasets.builder import build_datasets
-from datasets.loader.build_loader import build_dataloader
-parser = argparse.ArgumentParser(description='PyTorch CIFAR AT-BSL Adversarial Training')
-parser.add_argument('--arch', type=str, choices=['res', 'wrn'],  default='res', metavar='N',
-                    help='model architecture')
-parser.add_argument('--aug', type=str, choices=['aua', 'ra', 'none'], default='aua', metavar='N',
+from datasets.tiny_imagenet import load_tinyimagenet
+parser = argparse.ArgumentParser(description='PyTorch Tiny-ImageNet AT-BSL Adversarial Training')
+parser.add_argument('--aug', type=str, choices=['ra', 'none'], default='ra', metavar='N',
                     help='data augmentation')
 parser.add_argument('--batch-size', type=int, default=128, metavar='N',
                     help='input batch size for training (default: 128)')
@@ -45,45 +40,18 @@ parser.add_argument('--save-freq', '-s', default=1, type=int, metavar='N',
 args = parser.parse_args()
 
 # settings
-model_dir = 'model-' + args.arch + '-cifar10-' + args.aug
+model_dir = 'model-tiny_imagenet-' + args.aug
 if not os.path.exists(model_dir):
     os.makedirs(model_dir)
 use_cuda = not args.no_cuda and torch.cuda.is_available()
 torch.manual_seed(args.seed)
 device = torch.device("cuda" if use_cuda else "cpu")
-kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
 
 # setup data loader
-if args.aug == 'aua':
-    transform_aug = [v2.AutoAugment(policy=AutoAugmentPolicy.CIFAR10)]
-elif args.aug == 'ra':
-    transform_aug = [v2.RandAugment(2,8)]
-elif args.aug == 'none':
-    transform_aug = []
-transform_train = v2.Compose(transform_aug + [
-    v2.RandomCrop(32, padding=4),
-    v2.RandomHorizontalFlip(),
-    v2.ToTensor(),
-])
-
-transform_test = v2.Compose([
-    v2.ToTensor(),
-])
-
-
-num_classes=10
-trainset, samples_per_cls = build_datasets(name='CIFAR10', mode='train',
-                                           num_classes=num_classes,
-                                           imbalance_ratio=0.02,
-                                           root='../data',
-                                           transform=transform_train)
-testset, _ = build_datasets(name='CIFAR10', mode='test',
-                            num_classes=num_classes, 
-                            root='../data',
-                            transform=transform_test)
-
-train_loader = build_dataloader(trainset, imgs_per_gpu=args.batch_size, dist=False, shuffle=True)
-test_loader = build_dataloader(testset, imgs_per_gpu=args.test_batch_size, dist=False, shuffle=False)
+train_loader, test_loader, samples_per_cls = load_tinyimagenet(data_dir='../data/tiny-imagenet',
+                                              aug=args.aug,
+                                              batch_size=args.batch_size,
+                                              test_batch_size=args.test_batch_size)
 
 def train(args, model, device, train_loader, optimizer, epoch):
     model.train()
@@ -125,11 +93,7 @@ def adjust_learning_rate(optimizer, epoch):
 
 
 def main():
-    # init model, ResNet18() can be also used here for training
-    if args.arch == 'res':
-        model = ResNet18(num_classes=num_classes).to(device)
-    elif args.arch == 'wrn':
-        model = WideResNet(num_classes=num_classes).to(device)
+    model = ti_preact_resnet('preact-resnet18').to(device)
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     best_acc = 0
     best_rob = 0
@@ -141,7 +105,7 @@ def main():
         # adversarial training
         train(args, model, device, train_loader, optimizer, epoch)
 
-        # evaluation
+        # evaluation on natural examples
         print('================================================================')
         if epoch >= 75:
             acc, rob = eval_adv_test_whitebox(model, device, test_loader)

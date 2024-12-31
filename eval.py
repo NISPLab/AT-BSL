@@ -8,6 +8,8 @@ from torch.autograd import Variable
 import torch.optim as optim
 from models.resnet import *
 from models.wideresnet import *
+from models.ti_preact_resnet import ti_preact_resnet
+from datasets.tiny_imagenet import *
 def cwloss(output, target,confidence=50, num_classes=10):
     # Compute the probability of the label class versus the maximum other
     # The same implementation as in repo CAT https://github.com/sunblaze-ucb/curriculum-adversarial-training-CAT
@@ -127,15 +129,22 @@ if __name__ == '__main__':
     if args.dataset == 'cifar10':
         item = datasets.CIFAR10(root='../data', train=False, transform=transform_chain, download=True)
         test_loader = data.DataLoader(item, batch_size=args.batch_size, shuffle=False, num_workers=0)
+        num_classes = 10
     elif args.dataset == 'cifar100':
         item = datasets.CIFAR100(root='../data', train=False, transform=transform_chain, download=True)
         test_loader = data.DataLoader(item, batch_size=args.batch_size, shuffle=False, num_workers=0)
-    num_classes = len(test_loader.dataset.classes)
+        num_classes = 100
+    elif args.dataset == 'tiny_imagenet':
+        item = test_dataset = TinyImagenet(root='../data/tiny-imagenet', split='val', download=False, transform=transform_chain)
+        test_loader = data.DataLoader(item, batch_size=args.batch_size, shuffle=False, num_workers=0)
+        num_classes = 200
     # load model
     if args.arch == 'res':
         model = ResNet18(num_classes=num_classes)
     elif args.arch == 'wrn':
         model = WideResNet(num_classes=num_classes)
+    elif args.arch == 'preact-resnet18':
+        model = ti_preact_resnet('preact-resnet18')
     model.load_state_dict(torch.load(model_path))
     model.cuda()
     model.eval()
