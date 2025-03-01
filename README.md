@@ -20,7 +20,7 @@ Code for CVPR 2024 "[Revisiting Adversarial Training under Long-Tailed Distribut
 - ```train_at_bsl_tiny_imagenet.py```: AT-BSL on Tiny-ImageNet-LT.
 - ```at_bsl_loss.py```: Loss function for AT-BSL.
 - ```pgd_attack.py```: Use PGD to select the best epoch during training.
-- ```eval.py```:  Evaluate the robustness under various attacks.
+- ```eval.py```:  Evaluate the robustness under various adversarial attacks.
 
 ## Run
 
